@@ -829,6 +829,8 @@ export const Reports = (mount, deps = {}, options = {}) => {
     const baseRowsByDaySede = new Map();
     const baseDocumentsBySedeSlot = new Map();
     const historicalBeforeRangeBySedeSlot = new Map();
+    const visibleSnapshotBySede = new Map();
+    const contextSnapshotBySede = new Map();
 
     (statusRows || [])
       .filter((row) => String(row?.tipoPersonal || '').trim() === 'empleado')
@@ -836,6 +838,15 @@ export const Reports = (mount, deps = {}, options = {}) => {
         const sedeCode = String(row?.sedeCodigo || '').trim();
         const day = String(row?.fecha || '').trim();
         if (!sedeCode || !day) return;
+        const snapshot = {
+          dependenciaNombre: String(row?.dependenciaNombreSnapshot || '').trim(),
+          dependenciaCodigo: String(row?.dependenciaCodigoSnapshot || '').trim(),
+          zonaNombre: String(row?.zonaNombreSnapshot || '').trim(),
+          zonaCodigo: String(row?.zonaCodigoSnapshot || '').trim(),
+          nombre: String(row?.sedeNombreSnapshot || '').trim()
+        };
+        if (!contextSnapshotBySede.has(sedeCode)) contextSnapshotBySede.set(sedeCode, snapshot);
+        if (visibleDaySet.has(day) && !visibleSnapshotBySede.has(sedeCode)) visibleSnapshotBySede.set(sedeCode, snapshot);
         const baseBucketKey = `${day}|${sedeCode}`;
         if (!baseRowsByDaySede.has(baseBucketKey)) baseRowsByDaySede.set(baseBucketKey, []);
         baseRowsByDaySede.get(baseBucketKey).push(row);
@@ -996,8 +1007,8 @@ export const Reports = (mount, deps = {}, options = {}) => {
 
     const rows = Array.from(plannedBySede.entries())
       .sort((a, b) => {
-        const left = sedeByCode.get(a[0]) || {};
-        const right = sedeByCode.get(b[0]) || {};
+        const left = visibleSnapshotBySede.get(a[0]) || contextSnapshotBySede.get(a[0]) || sedeByCode.get(a[0]) || {};
+        const right = visibleSnapshotBySede.get(b[0]) || contextSnapshotBySede.get(b[0]) || sedeByCode.get(b[0]) || {};
         const byDependency = String(left?.dependenciaNombre || '').localeCompare(String(right?.dependenciaNombre || ''));
         if (byDependency !== 0) return byDependency;
         const byZone = String(left?.zonaNombre || '').localeCompare(String(right?.zonaNombre || ''));
@@ -1005,7 +1016,11 @@ export const Reports = (mount, deps = {}, options = {}) => {
         return String(left?.nombre || '').localeCompare(String(right?.nombre || ''));
       })
       .flatMap(([sedeCode, plannedCount]) => {
-        const sede = sedeByCode.get(sedeCode) || {};
+        const sede = {
+          ...(sedeByCode.get(sedeCode) || {}),
+          ...(contextSnapshotBySede.get(sedeCode) || {}),
+          ...(visibleSnapshotBySede.get(sedeCode) || {})
+        };
         const basePlannedCount = Math.max(0, parseOperatorCount(sede?.numeroOperarios));
         const count = Math.max(0, Number(plannedCount || 0));
         return Array.from({ length: count }, (_, slotIndex) => {
