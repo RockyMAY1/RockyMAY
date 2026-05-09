@@ -352,6 +352,7 @@ export const EmployeesAdmin=(mount,deps={})=>{
       const assignmentChanged=cargoChanged || sedeChanged;
       const suggestedTransferEnd=toInputDate(new Date()) || '';
       const suggestedTransferStart=addOneDayToInputDate(suggestedTransferEnd);
+      const todayBogota=todayInputDate();
       const historyRetiroLabel = sedeChanged && cargoChanged
         ? 'Fecha fin de asignacion anterior'
         : sedeChanged
@@ -369,7 +370,7 @@ export const EmployeesAdmin=(mount,deps={})=>{
         fields:[
           ...(assignmentChanged ? [
             { id:'historyRetiroDate', label:historyRetiroLabel, type:'date', required:true, value:suggestedTransferEnd },
-            { id:'historyIngresoDate', label:historyIngresoLabel, type:'date', required:true, value:suggestedTransferStart }
+            { id:'historyIngresoDate', label:historyIngresoLabel, type:'date', required:true, value:suggestedTransferStart, min:sedeChanged ? todayBogota : undefined }
           ] : []),
           { id:'detail', label:'Detalle de la modificacion', type:'textarea', required:true, placeholder:'Describe brevemente el cambio realizado' }
         ]
@@ -384,6 +385,9 @@ export const EmployeesAdmin=(mount,deps={})=>{
         const historyIngresoDate=assignmentChanged ? String(modal.values.historyIngresoDate||'').trim() : newIngreso;
         if(assignmentChanged && !/^\d{4}-\d{2}-\d{2}$/.test(historyRetiroDate)) return alert('La fecha fin del tramo anterior es obligatoria.');
         if(!/^\d{4}-\d{2}-\d{2}$/.test(historyIngresoDate)) return alert('La fecha de ingreso es obligatoria.');
+        if(sedeChanged && historyIngresoDate<todayBogota) {
+          return alert(`La fecha de inicio en nueva sede no puede ser anterior a hoy (${todayBogota}).`);
+        }
         if(assignmentChanged && addOneDayToInputDate(historyRetiroDate)!==historyIngresoDate) {
           return alert('La nueva asignacion debe iniciar el dia siguiente al fin del tramo anterior.');
         }
@@ -416,6 +420,9 @@ export const EmployeesAdmin=(mount,deps={})=>{
       const pad=(n)=> String(n).padStart(2,'0');
       return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
     }catch{ return ''; }
+  }
+  function todayInputDate(){
+    return new Intl.DateTimeFormat('en-CA',{ timeZone:'America/Bogota' }).format(new Date());
   }
   function addOneDayToInputDate(value){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'').trim())) return '';

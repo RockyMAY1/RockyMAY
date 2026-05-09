@@ -2723,6 +2723,9 @@ export async function updateEmployee(id, data = {}) {
       throw new Error('La nueva asignacion debe iniciar el dia siguiente al fin del tramo anterior.');
     }
   }
+  if (sedeChangedPreview && assignmentIngresoPreview && assignmentIngresoPreview < todayBogotaISO()) {
+    throw new Error(`La fecha de inicio en nueva sede no puede ser anterior a hoy (${todayBogotaISO()}).`);
+  }
   if (sedeChangedPreview && !cargoChangedPreview && patch.fecha_ingreso !== undefined && nextIngresoPreview !== currentIngreso) {
     patch.fecha_ingreso = currentRow.fecha_ingreso || null;
   }

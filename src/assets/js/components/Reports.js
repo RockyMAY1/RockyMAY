@@ -772,8 +772,46 @@ export const Reports = (mount, deps = {}, options = {}) => {
     return '';
   }
 
+  function resolveServiceWithoutFsBaseDocumentForDay(documentsByDay = [], dayIndex = -1) {
+    if (!Array.isArray(documentsByDay) || dayIndex < 0 || dayIndex >= documentsByDay.length) return '';
+    const currentDoc = String(documentsByDay[dayIndex] || '').trim();
+    if (currentDoc) return currentDoc;
+
+    let previousDoc = '';
+    for (let index = dayIndex - 1; index >= 0; index -= 1) {
+      const candidate = String(documentsByDay[index] || '').trim();
+      if (!candidate) continue;
+      previousDoc = candidate;
+      break;
+    }
+
+    let nextDoc = '';
+    for (let index = dayIndex + 1; index < documentsByDay.length; index += 1) {
+      const candidate = String(documentsByDay[index] || '').trim();
+      if (!candidate) continue;
+      nextDoc = candidate;
+      break;
+    }
+
+    if (previousDoc && nextDoc) {
+      const previousIdentity = normalizeServiceWithoutFsDocumentIdentity(previousDoc);
+      const nextIdentity = normalizeServiceWithoutFsDocumentIdentity(nextDoc);
+      if (previousIdentity && nextIdentity && previousIdentity === nextIdentity) return previousDoc;
+    }
+    return '';
+  }
+
   function normalizeServicesWithoutFsRows(dateFrom, dateTo, statusRows = [], sedeRows = []) {
     const days = buildAttendanceWithoutFsDays(dateFrom, dateTo);
+    const visibleDaySet = new Set(days.map((day) => day.iso));
+    const contextStart = (statusRows || []).reduce((min, row) => {
+      const day = String(row?.fecha || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return min;
+      if (!min || day < min) return day;
+      return min;
+    }, dateFrom);
+    const contextDays = buildAttendanceWithoutFsDays(contextStart || dateFrom, dateTo);
+    const contextDayIndexByIso = new Map(contextDays.map((day, index) => [day.iso, index]));
     const sedeByCode = new Map(
       (sedeRows || [])
         .filter((row) => String(row?.estado || 'activo').trim().toLowerCase() !== 'inactivo')
@@ -783,6 +821,7 @@ export const Reports = (mount, deps = {}, options = {}) => {
     const plannedBySede = new Map();
     const scheduledByDaySede = new Map();
     const baseRowsByDaySede = new Map();
+    const baseDocumentsBySedeSlot = new Map();
     const historicalBeforeRangeBySedeSlot = new Map();
 
     (statusRows || [])
@@ -810,7 +849,8 @@ export const Reports = (mount, deps = {}, options = {}) => {
         if (byName !== 0) return byName;
         return String(a?.documento || '').localeCompare(String(b?.documento || ''));
       });
-      const [, sedeCode] = key.split('|');
+      const [day, sedeCode] = key.split('|');
+      if (!visibleDaySet.has(day)) return;
       const currentPlanned = Number(plannedBySede.get(sedeCode) || 0);
       if (rows.length > currentPlanned) plannedBySede.set(sedeCode, rows.length);
     });
@@ -893,6 +933,17 @@ export const Reports = (mount, deps = {}, options = {}) => {
 
         baseAssignedByDaySede.set(bucketKey, assignedRows);
       });
+
+      Array.from({ length: slotCount }, (_, slotIndex) => {
+        baseDocumentsBySedeSlot.set(
+          `${sedeCode}|${slotIndex}`,
+          contextDays.map((day) => {
+            const baseRows = baseAssignedByDaySede.get(`${day.iso}|${sedeCode}`) || [];
+            const baseRow = baseRows[slotIndex] || null;
+            return resolveServiceWithoutFsOwnDocument(baseRow);
+          })
+        );
+      });
     });
 
     assignedByDaySede.forEach((rows, key) => {
@@ -929,6 +980,7 @@ export const Reports = (mount, deps = {}, options = {}) => {
           const isAdditionalService = serviceNumber > basePlannedCount;
           let serviceName = `Servicio ${serviceNumber}${isAdditionalService ? ' AD' : ''}`;
           const historicalValues = [...(historicalBeforeRangeBySedeSlot.get(`${sedeCode}|${slotIndex}`) || [])];
+          const baseDocumentsByDay = baseDocumentsBySedeSlot.get(`${sedeCode}|${slotIndex}`) || [];
           let dynamicServiceDoc = findLastServiceWithoutFsDocumentValue(historicalValues);
           const serviceDoc = dynamicServiceDoc || 'NOCON';
 
@@ -942,9 +994,11 @@ export const Reports = (mount, deps = {}, options = {}) => {
           };
           const previousValues = [...historicalValues];
 
-          days.forEach((day) => {
+          days.forEach((day, dayIndex) => {
             const scheduled = assignedByDaySede.get(`${day.iso}|${sedeCode}`) || [];
             const current = scheduled[slotIndex] || null;
+            const contextDayIndex = Number(contextDayIndexByIso.get(day.iso));
+            const validBaseDocForDay = resolveServiceWithoutFsBaseDocumentForDay(baseDocumentsByDay, contextDayIndex);
             let value = '';
 
             if (day.isSpecial) {
@@ -955,8 +1009,7 @@ export const Reports = (mount, deps = {}, options = {}) => {
                 value = String(resolved?.value || '').trim();
                 if (resolved?.counts) row.asistencias += 1;
               } else {
-                value = resolveSpecialServiceWithoutFsValue(previousValues);
-                if (!value) value = dynamicServiceDoc;
+                value = validBaseDocForDay || resolveSpecialServiceWithoutFsValue(previousValues);
                 if (value && value !== 'AUS' && value !== 'NOCON') {
                   row.asistencias += 1;
                 }
