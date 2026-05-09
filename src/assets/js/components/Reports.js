@@ -818,6 +818,21 @@ export const Reports = (mount, deps = {}, options = {}) => {
     }, dateFrom);
     const contextDays = buildAttendanceWithoutFsDays(contextStart || dateFrom, dateTo);
     const contextDayIndexByIso = new Map(contextDays.map((day, index) => [day.iso, index]));
+    const siteKeyDelimiter = '||';
+    const buildSiteKey = (sedeCode, dependencyCode = '', zoneCode = '') => [
+      String(sedeCode || '').trim(),
+      String(dependencyCode || '').trim(),
+      String(zoneCode || '').trim()
+    ].join(siteKeyDelimiter);
+    const bucketKey = (day, siteKey) => `${day}|${siteKey}`;
+    const parseBucketKey = (key) => {
+      const separatorIndex = String(key || '').indexOf('|');
+      if (separatorIndex < 0) return { day: '', siteKey: '' };
+      return {
+        day: String(key).slice(0, separatorIndex),
+        siteKey: String(key).slice(separatorIndex + 1)
+      };
+    };
     const sedeByCode = new Map(
       (sedeRows || [])
         .filter((row) => String(row?.estado || 'activo').trim().toLowerCase() !== 'inactivo')
@@ -825,6 +840,7 @@ export const Reports = (mount, deps = {}, options = {}) => {
         .filter(([key]) => Boolean(key))
     );
     const plannedBySede = new Map();
+    const sedeCodeBySiteKey = new Map();
     const scheduledByDaySede = new Map();
     const baseRowsByDaySede = new Map();
     const baseDocumentsBySedeSlot = new Map();
@@ -839,25 +855,30 @@ export const Reports = (mount, deps = {}, options = {}) => {
         const day = String(row?.fecha || '').trim();
         if (!sedeCode || !day) return;
         const snapshot = {
+          sedeCodigo: sedeCode,
           dependenciaNombre: String(row?.dependenciaNombreSnapshot || '').trim(),
           dependenciaCodigo: String(row?.dependenciaCodigoSnapshot || '').trim(),
           zonaNombre: String(row?.zonaNombreSnapshot || '').trim(),
           zonaCodigo: String(row?.zonaCodigoSnapshot || '').trim(),
           nombre: String(row?.sedeNombreSnapshot || '').trim()
         };
-        if (!contextSnapshotBySede.has(sedeCode)) contextSnapshotBySede.set(sedeCode, snapshot);
-        if (visibleDaySet.has(day) && !visibleSnapshotBySede.has(sedeCode)) visibleSnapshotBySede.set(sedeCode, snapshot);
-        const baseBucketKey = `${day}|${sedeCode}`;
+        const siteKey = buildSiteKey(sedeCode, snapshot.dependenciaCodigo || snapshot.dependenciaNombre, snapshot.zonaCodigo || snapshot.zonaNombre);
+        sedeCodeBySiteKey.set(siteKey, sedeCode);
+        if (!contextSnapshotBySede.has(siteKey)) contextSnapshotBySede.set(siteKey, snapshot);
+        if (visibleDaySet.has(day) && !visibleSnapshotBySede.has(siteKey)) visibleSnapshotBySede.set(siteKey, snapshot);
+        const baseBucketKey = bucketKey(day, siteKey);
         if (!baseRowsByDaySede.has(baseBucketKey)) baseRowsByDaySede.set(baseBucketKey, []);
         baseRowsByDaySede.get(baseBucketKey).push(row);
         if (row?.servicioProgramado !== true) return;
-        const bucketKey = `${day}|${sedeCode}`;
-        if (!scheduledByDaySede.has(bucketKey)) scheduledByDaySede.set(bucketKey, []);
-        scheduledByDaySede.get(bucketKey).push(row);
+        const scheduledBucketKey = bucketKey(day, siteKey);
+        if (!scheduledByDaySede.has(scheduledBucketKey)) scheduledByDaySede.set(scheduledBucketKey, []);
+        scheduledByDaySede.get(scheduledBucketKey).push(row);
       });
 
     Array.from(sedeByCode.entries()).forEach(([sedeCode, sede]) => {
-      plannedBySede.set(sedeCode, parseOperatorCount(sede?.numeroOperarios));
+      const siteKey = buildSiteKey(sedeCode, sede?.dependenciaCodigo || sede?.dependenciaNombre, sede?.zonaCodigo || sede?.zonaNombre);
+      sedeCodeBySiteKey.set(siteKey, sedeCode);
+      plannedBySede.set(siteKey, parseOperatorCount(sede?.numeroOperarios));
     });
 
     scheduledByDaySede.forEach((rows, key) => {
@@ -866,32 +887,32 @@ export const Reports = (mount, deps = {}, options = {}) => {
         if (byName !== 0) return byName;
         return String(a?.documento || '').localeCompare(String(b?.documento || ''));
       });
-      const [day, sedeCode] = key.split('|');
+      const { day, siteKey } = parseBucketKey(key);
       if (!visibleDaySet.has(day)) return;
-      const currentPlanned = Number(plannedBySede.get(sedeCode) || 0);
-      if (rows.length > currentPlanned) plannedBySede.set(sedeCode, rows.length);
+      const currentPlanned = Number(plannedBySede.get(siteKey) || 0);
+      if (rows.length > currentPlanned) plannedBySede.set(siteKey, rows.length);
     });
 
     const assignedByDaySede = new Map();
     const baseAssignedByDaySede = new Map();
-    Array.from(plannedBySede.keys()).forEach((sedeCode) => {
-      const slotCount = Math.max(0, Number(plannedBySede.get(sedeCode) || 0));
+    Array.from(plannedBySede.keys()).forEach((siteKey) => {
+      const slotCount = Math.max(0, Number(plannedBySede.get(siteKey) || 0));
       const sedeDays = Array.from(scheduledByDaySede.keys())
-        .map((key) => key.split('|'))
-        .filter((parts) => parts[1] === sedeCode)
-        .map((parts) => parts[0])
+        .map((key) => parseBucketKey(key))
+        .filter((parts) => parts.siteKey === siteKey)
+        .map((parts) => parts.day)
         .sort();
       const baseSedeDays = Array.from(baseRowsByDaySede.keys())
-        .map((key) => key.split('|'))
-        .filter((parts) => parts[1] === sedeCode)
-        .map((parts) => parts[0])
+        .map((key) => parseBucketKey(key))
+        .filter((parts) => parts.siteKey === siteKey)
+        .map((parts) => parts.day)
         .sort();
       const slotIdentities = Array.from({ length: slotCount }, () => '');
       const baseSlotIdentities = Array.from({ length: slotCount }, () => '');
 
       sedeDays.forEach((day) => {
-        const bucketKey = `${day}|${sedeCode}`;
-        const sourceRows = [...(scheduledByDaySede.get(bucketKey) || [])];
+        const currentBucketKey = bucketKey(day, siteKey);
+        const sourceRows = [...(scheduledByDaySede.get(currentBucketKey) || [])];
         const assignedRows = Array.from({ length: slotCount }, () => null);
 
         slotIdentities.forEach((identity, slotIndex) => {
@@ -912,12 +933,12 @@ export const Reports = (mount, deps = {}, options = {}) => {
           if (identity) slotIdentities[slotIndex] = identity;
         });
 
-        assignedByDaySede.set(bucketKey, assignedRows);
+        assignedByDaySede.set(currentBucketKey, assignedRows);
       });
 
       baseSedeDays.forEach((day) => {
-        const bucketKey = `${day}|${sedeCode}`;
-        const sourceRows = [...(baseRowsByDaySede.get(bucketKey) || [])];
+        const currentBucketKey = bucketKey(day, siteKey);
+        const sourceRows = [...(baseRowsByDaySede.get(currentBucketKey) || [])];
         sourceRows.sort((a, b) => {
           const scheduledA = a?.servicioProgramado === true ? 1 : 0;
           const scheduledB = b?.servicioProgramado === true ? 1 : 0;
@@ -948,14 +969,14 @@ export const Reports = (mount, deps = {}, options = {}) => {
           if (identity) baseSlotIdentities[slotIndex] = identity;
         });
 
-        baseAssignedByDaySede.set(bucketKey, assignedRows);
+        baseAssignedByDaySede.set(currentBucketKey, assignedRows);
       });
 
       Array.from({ length: slotCount }, (_, slotIndex) => {
         baseDocumentsBySedeSlot.set(
-          `${sedeCode}|${slotIndex}`,
+          `${siteKey}#${slotIndex}`,
           contextDays.map((day) => {
-            const baseRows = baseAssignedByDaySede.get(`${day.iso}|${sedeCode}`) || [];
+            const baseRows = baseAssignedByDaySede.get(bucketKey(day.iso, siteKey)) || [];
             const baseRow = baseRows[slotIndex] || null;
             return resolveServiceWithoutFsOwnDocument(baseRow);
           })
@@ -963,16 +984,16 @@ export const Reports = (mount, deps = {}, options = {}) => {
       });
     });
 
-    Array.from(plannedBySede.keys()).forEach((sedeCode) => {
-      const slotCount = Math.max(0, Number(plannedBySede.get(sedeCode) || 0));
+    Array.from(plannedBySede.keys()).forEach((siteKey) => {
+      const slotCount = Math.max(0, Number(plannedBySede.get(siteKey) || 0));
       Array.from({ length: slotCount }, (_, slotIndex) => {
-        const slotKey = `${sedeCode}|${slotIndex}`;
+        const slotKey = `${siteKey}#${slotIndex}`;
         const history = [];
         const baseDocumentsByDay = baseDocumentsBySedeSlot.get(slotKey) || [];
 
         contextDays.forEach((day) => {
           if (day.iso >= dateFrom) return;
-          const scheduled = assignedByDaySede.get(`${day.iso}|${sedeCode}`) || [];
+          const scheduled = assignedByDaySede.get(bucketKey(day.iso, siteKey)) || [];
           const current = scheduled[slotIndex] || null;
           const contextDayIndex = Number(contextDayIndexByIso.get(day.iso));
           const validBaseDocForDay = resolveServiceWithoutFsBaseDocumentForDay(baseDocumentsByDay, contextDayIndex);
@@ -1009,17 +1030,24 @@ export const Reports = (mount, deps = {}, options = {}) => {
       .sort((a, b) => {
         const left = visibleSnapshotBySede.get(a[0]) || contextSnapshotBySede.get(a[0]) || sedeByCode.get(a[0]) || {};
         const right = visibleSnapshotBySede.get(b[0]) || contextSnapshotBySede.get(b[0]) || sedeByCode.get(b[0]) || {};
+        const byDependencyCode = String(left?.dependenciaCodigo || '').localeCompare(String(right?.dependenciaCodigo || ''));
+        if (byDependencyCode !== 0) return byDependencyCode;
         const byDependency = String(left?.dependenciaNombre || '').localeCompare(String(right?.dependenciaNombre || ''));
         if (byDependency !== 0) return byDependency;
+        const byZoneCode = String(left?.zonaCodigo || '').localeCompare(String(right?.zonaCodigo || ''));
+        if (byZoneCode !== 0) return byZoneCode;
         const byZone = String(left?.zonaNombre || '').localeCompare(String(right?.zonaNombre || ''));
         if (byZone !== 0) return byZone;
-        return String(left?.nombre || '').localeCompare(String(right?.nombre || ''));
+        const byName = String(left?.nombre || '').localeCompare(String(right?.nombre || ''));
+        if (byName !== 0) return byName;
+        return String(sedeCodeBySiteKey.get(a[0]) || '').localeCompare(String(sedeCodeBySiteKey.get(b[0]) || ''));
       })
-      .flatMap(([sedeCode, plannedCount]) => {
+      .flatMap(([siteKey, plannedCount]) => {
+        const sedeCode = sedeCodeBySiteKey.get(siteKey) || String(siteKey).split(siteKeyDelimiter)[0] || '';
         const sede = {
           ...(sedeByCode.get(sedeCode) || {}),
-          ...(contextSnapshotBySede.get(sedeCode) || {}),
-          ...(visibleSnapshotBySede.get(sedeCode) || {})
+          ...(contextSnapshotBySede.get(siteKey) || {}),
+          ...(visibleSnapshotBySede.get(siteKey) || {})
         };
         const basePlannedCount = Math.max(0, parseOperatorCount(sede?.numeroOperarios));
         const count = Math.max(0, Number(plannedCount || 0));
@@ -1027,8 +1055,9 @@ export const Reports = (mount, deps = {}, options = {}) => {
           const serviceNumber = slotIndex + 1;
           const isAdditionalService = serviceNumber > basePlannedCount;
           let serviceName = `Servicio ${serviceNumber}${isAdditionalService ? ' AD' : ''}`;
-          const historicalValues = [...(historicalBeforeRangeBySedeSlot.get(`${sedeCode}|${slotIndex}`) || [])];
-          const baseDocumentsByDay = baseDocumentsBySedeSlot.get(`${sedeCode}|${slotIndex}`) || [];
+          const slotKey = `${siteKey}#${slotIndex}`;
+          const historicalValues = [...(historicalBeforeRangeBySedeSlot.get(slotKey) || [])];
+          const baseDocumentsByDay = baseDocumentsBySedeSlot.get(slotKey) || [];
           let dynamicServiceDoc = findLastServiceWithoutFsDocumentValue(historicalValues);
           const serviceDoc = dynamicServiceDoc || 'NOCON';
 
@@ -1043,7 +1072,7 @@ export const Reports = (mount, deps = {}, options = {}) => {
           const previousValues = [...historicalValues];
 
           days.forEach((day, dayIndex) => {
-            const scheduled = assignedByDaySede.get(`${day.iso}|${sedeCode}`) || [];
+            const scheduled = assignedByDaySede.get(bucketKey(day.iso, siteKey)) || [];
             const current = scheduled[slotIndex] || null;
             const contextDayIndex = Number(contextDayIndexByIso.get(day.iso));
             const validBaseDocForDay = resolveServiceWithoutFsBaseDocumentForDay(baseDocumentsByDay, contextDayIndex);
