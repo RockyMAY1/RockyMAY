@@ -740,6 +740,7 @@ export const Reports = (mount, deps = {}, options = {}) => {
 
   function resolveSpecialServiceWithoutFsValue(previousValues = []) {
     const prev = String(previousValues[previousValues.length - 1] || '').trim();
+    if (isServiceWithoutFsDocumentValue(prev)) return prev;
     return prev === 'NOCON' ? 'NOCON' : '';
   }
 
