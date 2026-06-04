@@ -18,7 +18,7 @@ export const Sidebar = () => {
   });
   brandImg.addEventListener('error', () => {
     brandImg.classList.add('hidden');
-    brandTitle.textContent = 'RockyMED';
+    brandTitle.textContent = 'RockyMAY';
     brandSubtitle.textContent = 'Gestion operativa';
   });
   const top = el('div', { className: 'sidebar__top' }, [

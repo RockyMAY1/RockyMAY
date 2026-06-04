@@ -3,14 +3,14 @@ import { el } from '../utils/dom.js';
 export const About = (mount) => {
   mount.replaceChildren(
     el('section', { className: 'main-card' }, [
-      el('h2', {}, ['Acerca de RockyMED']),
+      el('h2', {}, ['Acerca de RockyMAY']),
       el('p', { className: 'text-muted mt-1' }, [
         'Plataforma de gestion operativa y administrativa para el seguimiento de servicios, personal y novedades.'
       ]),
       el('div', { className: 'contact-grid mt-2' }, [
         el('article', { className: 'contact-card' }, [
           el('h3', { className: 'contact-card__title' }, ['Informacion corporativa']),
-          el('p', { className: 'contact-card__row' }, [el('strong', {}, ['Version: ']), 'RockyMED v2.3.0.']),
+          el('p', { className: 'contact-card__row' }, [el('strong', {}, ['Version: ']), 'RockyMAY v2.3.0.']),
           el('p', { className: 'contact-card__row' }, [el('strong', {}, ['Titularidad: ']), 'CAPCOL S.A.S.']),
           el('p', { className: 'contact-card__row' }, [el('strong', {}, ['NIT: ']), '900.939.656-7']),
           el('p', { className: 'contact-card__row' }, [el('strong', {}, ['Derechos: ']), 'Todos los derechos reservados'])

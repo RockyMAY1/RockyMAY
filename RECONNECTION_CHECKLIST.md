@@ -1,11 +1,11 @@
-# RockyMED - Checklist de reconexion
+# RockyMAY - Checklist de reconexion
 
 ## 1. GitHub
 - Crear un repositorio nuevo en la cuenta destino.
 - En local, apuntar `origin` al repo nuevo:
 
 ```powershell
-git remote add origin https://github.com/TU-USUARIO-O-ORG/RockyMED.git
+git remote add origin URL_DEL_REPOSITORIO_NUEVO
 git branch -M main
 git push -u origin main
 ```
@@ -24,6 +24,7 @@ export const SUPABASE_ANON_KEY = 'TU_SUPABASE_ANON_KEY';
 - Actualizar `whatsapp-backend/.env` y variables de Vercel:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
+  - `EMPLOYEE_PORTAL_URL`
 
 ## 3. WhatsApp Cloud API
 - Crear o seleccionar la nueva app en Meta.

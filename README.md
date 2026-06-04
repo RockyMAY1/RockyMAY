@@ -1,4 +1,4 @@
-# RockyEDU
+# RockyMAY
 
 Plataforma de gestion operativa y administrativa para el seguimiento de servicios, personal y novedades.
 

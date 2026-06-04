@@ -59,8 +59,6 @@ const MENU_IDS = {
 };
 
 const NO_REGISTERED_MESSAGE = 'No estás registrado en nuestra base de datos, por favor comunícate con tu supervisor.';
-const EMPLOYEE_PORTAL_URL = 'https://rockymed.capcol.com.co/employee.html';
-
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
@@ -2386,7 +2384,11 @@ function buildSupportMessage(novelty, incapacity) {
     ? '\n\nRECUERDA: Si es mayor a tres días debes cargar la historia clínica o Epicrisis.'
     : '';
 
-  return `Por favor cargue el soporte ingresando al siguiente link:\n${EMPLOYEE_PORTAL_URL}${reminder}`;
+  if (!config.employeePortalUrl) {
+    return `Por favor ingresa al portal de empleados para cargar el soporte.${reminder}`;
+  }
+
+  return `Por favor cargue el soporte ingresando al siguiente link:\n${config.employeePortalUrl}${reminder}`;
 }
 
 function resolveSedeSelection(session, parsed, prefix) {

@@ -17,7 +17,7 @@ export const Home = async (mount, deps = {}) => {
       el('div', { className: 'home-hero__meta' }, [
         heroPill('Rol activo', role),
         heroPill('Fecha de corte', today),
-        heroPill('Plataforma', 'RockyMED')
+        heroPill('Plataforma', 'RockyMAY')
       ])
     ])
   ]);

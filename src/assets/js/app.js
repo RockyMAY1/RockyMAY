@@ -175,4 +175,4 @@ const guardWrite=(perm,fn)=> async (...args)=>{
 })();
 function requireAuth(ok){ const { user }=getState(); if(!user){ navigate('/login'); return; } return ok?.(); }
 function guard(perm, ok){ if(!can(perm)) return block('No tienes permiso para acceder a esta sección.'); return ok?.(); }
-function block(text){ const div=document.createElement('div'); div.className='main-card'; div.innerHTML=`<h2 style="margin:0 0 .5rem 0;">RockyMED</h2><p>${text}</p>`; root.replaceChildren(div); return null; }
+function block(text){ const div=document.createElement('div'); div.className='main-card'; div.innerHTML=`<h2 style="margin:0 0 .5rem 0;">RockyMAY</h2><p>${text}</p>`; root.replaceChildren(div); return null; }
